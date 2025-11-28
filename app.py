@@ -7,23 +7,95 @@ def main(page: ft.Page):
     page.window.resizable = False
     page.title = "Expense Tracker"
 
-    # Sample data for expenses
+    # Sample data for expenses and income
     expenses = []
+    income = []
 
     # Dashboard Content
     def update_dashboard():
-        total = sum(expense["amount"] for expense in expenses)
-        recent = expenses[-3:] if expenses else []
+        total_spent = sum(expense["amount"] for expense in expenses)
+        total_received = sum(inc["amount"] for inc in income)
+        balance = total_received - total_spent
+
         dashboard_content.controls = [
             ft.Text("Dashboard", size=24, weight=ft.FontWeight.BOLD),
-            ft.Text(f"Total Expenses: ${total:.2f}", size=20),
+
+            # Cards Row
+            ft.Row(
+                [
+                    # Money Received Card (Green Gradient)
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Money Received", size=14, color="white"),
+                                ft.Text(f"${total_received:.2f}", size=20, weight=ft.FontWeight.BOLD, color="white"),
+                            ],
+                            spacing=5,
+                        ),
+                        width=100,
+                        height=90,
+                        padding=10,
+                        bgcolor=ft.Colors.GREEN_400,
+                        gradient=ft.LinearGradient(
+                            begin=ft.alignment.top_left,
+                            end=ft.alignment.bottom_right,
+                            colors=[ft.Colors.GREEN_400, ft.Colors.GREEN_700],
+                        ),
+                        border_radius=ft.border_radius.all(10),
+                    ),
+
+                    # Money Spent Card (Red Gradient)
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Money Spent", size=14, color="white"),
+                                ft.Text(f"${total_spent:.2f}", size=20, weight=ft.FontWeight.BOLD, color="white"),
+                            ],
+                            spacing=5,
+                        ),
+                        width=100,
+                        height=90,
+                        padding=10,
+                        bgcolor=ft.Colors.RED_400,
+                        gradient=ft.LinearGradient(
+                            begin=ft.alignment.top_left,
+                            end=ft.alignment.bottom_right,
+                            colors=[ft.Colors.RED_400, ft.Colors.RED_700],
+                        ),
+                        border_radius=ft.border_radius.all(10),
+                    ),
+
+                    # Remaining Balance Card (Blue Gradient)
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Balance", size=14, color="white"),
+                                ft.Text(f"${balance:.2f}", size=20, weight=ft.FontWeight.BOLD, color="white"),
+                            ],
+                            spacing=5,
+                        ),
+                        width=100,
+                        height=90,
+                        padding=10,
+                        bgcolor=ft.Colors.BLUE_400,
+                        gradient=ft.LinearGradient(
+                            begin=ft.alignment.top_left,
+                            end=ft.alignment.bottom_right,
+                            colors=[ft.Colors.BLUE_400, ft.Colors.BLUE_700],
+                        ),
+                        border_radius=ft.border_radius.all(10),
+                    ),
+                ],
+                spacing=10,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+
             ft.Text("Recent Expenses:", size=18, weight=ft.FontWeight.BOLD),
-            ft.Column([ft.Text(f"- {exp['description']}: ${exp['amount']:.2f}") for exp in recent]),
-            ft.ElevatedButton("Add Expense", on_click=lambda e: show_expenses(e))
+            ft.Column([ft.Text(f"- {exp['description']}: ${exp['amount']:.2f}") for exp in expenses[-3:]]),
         ]
         page.update()
 
-    dashboard_content = ft.Column()
+    dashboard_content = ft.Column(spacing=20)
 
     # Expenses Content
     expense_amount = ft.TextField(hint_text="Amount", width=150)
@@ -55,6 +127,7 @@ def main(page: ft.Page):
                 expense_date.value = ""
                 update_dashboard()
                 update_expenses_list()
+                update_reports_chart()
                 page.snack_bar = ft.SnackBar(ft.Text("Expense added!"))
                 page.snack_bar.open = True
                 page.update()
@@ -69,7 +142,7 @@ def main(page: ft.Page):
         expenses_list.controls = [
             ft.Row([
                 ft.Text(f"{exp['category']}: ${exp['amount']:.2f} - {exp['description']} ({exp['date']})"),
-                ft.IconButton(ft.icons.DELETE, on_click=lambda e, i=i: delete_expense(i))
+                ft.IconButton(ft.Icons.DELETE, on_click=lambda e, i=i: delete_expense(i))
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
             for i, exp in enumerate(expenses)
         ]
@@ -79,6 +152,7 @@ def main(page: ft.Page):
         expenses.pop(i)
         update_dashboard()
         update_expenses_list()
+        update_reports_chart()
 
     expenses_content = ft.Column([
         ft.Text("Expenses", size=24, weight=ft.FontWeight.BOLD),
@@ -90,18 +164,40 @@ def main(page: ft.Page):
     ])
 
     # Reports Content
-    reports_content = ft.Column([
-        ft.Text("Reports", size=24, weight=ft.FontWeight.BOLD),
-        ft.Text("Expenses by Category:", size=18, weight=ft.FontWeight.BOLD),
-        ft.BarChart(
-            groups=[ft.BarChartGroup(
-                x=cat,
-                bars=[ft.BarChartBar(value=sum(exp["amount"] for exp in expenses if exp["category"] == cat), color=ft.colors.BLUE)]
-            ) for cat in set(exp["category"] for exp in expenses)],
-            border=ft.BorderSide(1, ft.Colors.GREY_400),
-            expand=True
-        )
-    ])
+    def update_reports_chart():
+        categories = set(exp["category"] for exp in expenses)
+        bars = []
+        for cat in categories:
+            total = sum(exp["amount"] for exp in expenses if exp["category"] == cat)
+            bars.append(
+                ft.BarChartRod(
+                    from_y=0,
+                    to_y=total,
+                    width=20,
+                    color=ft.Colors.BLUE_400,
+                    tooltip=f"{cat}: ${total:.2f}",
+                    text_above_rod=ft.Text(f"${total:.2f}", size=12),
+                )
+            )
+
+        reports_content.controls = [
+            ft.Text("Reports", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text("Expenses by Category:", size=18, weight=ft.FontWeight.BOLD),
+            ft.BarChart(
+                bar_groups=[
+                    ft.BarChartGroup(
+                        x=100,
+                        bar_rods=bars,
+                    )
+                ],
+                border=ft.BorderSide(1, ft.Colors.GREY_400),
+                expand=True,
+                max_y=max(exp["amount"] for exp in expenses) + 10 if expenses else 100,
+            )
+        ]
+        page.update()
+
+    reports_content = ft.Column()
 
     # Settings Content
     settings_content = ft.Column([
@@ -110,43 +206,45 @@ def main(page: ft.Page):
         ft.ElevatedButton("Export Data", on_click=lambda e: print("Exporting data..."))
     ])
 
-    def show_dashboard(e):
-        page.controls[1] = dashboard_content
-        update_dashboard()
+    # Navigation Bar
+    def on_nav_change(e):
+        selected_index = e.control.selected_index
+        if selected_index == 0:
+            content.controls = [dashboard_content]
+        elif selected_index == 1:
+            content.controls = [expenses_content]
+            update_expenses_list()
+        elif selected_index == 2:
+            content.controls = [reports_content]
+            update_reports_chart()
+        elif selected_index == 3:
+            content.controls = [settings_content]
+        page.update()
 
-    def show_expenses(e):
-        page.controls[1] = expenses_content
-        update_expenses_list()
-
-    def show_reports(e):
-        page.controls[1] = reports_content
-
-    def show_settings(e):
-        page.controls[1] = settings_content
-
-    # AppBar
-    page.appbar = ft.AppBar(
-        leading=ft.Icon(ft.Icons.ACCOUNT_BALANCE_WALLET),
-        leading_width=40,
-        title=ft.Text("Expense Tracker"),
-        center_title=False,
-        bgcolor=ft.Colors.BLUE,
-        color=ft.Colors.WHITE,
-        actions=[
-            ft.PopupMenuButton(
-                items=[
-                    ft.PopupMenuItem(text="Dashboard", on_click=show_dashboard),
-                    ft.PopupMenuItem(text="Expenses", on_click=show_expenses),
-                    ft.PopupMenuItem(text="Reports", on_click=show_reports),
-                    ft.PopupMenuItem(),  # divider
-                    ft.PopupMenuItem(text="Settings", on_click=show_settings),
-                ]
-            ),
+    nav_bar = ft.NavigationBar(
+        destinations=[
+            ft.NavigationBarDestination(icon=ft.Icons.DASHBOARD, label="Dashboard"),
+            ft.NavigationBarDestination(icon=ft.Icons.MONEY, label="Expenses"),
+            ft.NavigationBarDestination(icon=ft.Icons.BAR_CHART, label="Reports"),
+            ft.NavigationBarDestination(icon=ft.Icons.SETTINGS, label="Settings"),
         ],
+        on_change=on_nav_change,
     )
 
-    # Initialize
-    page.add(page.appbar, dashboard_content)
+    # Main Content Area
+    content = ft.Container(
+        content=dashboard_content,
+        expand=True,
+        padding=20,
+    )
+
+    # Add NavigationBar and Content to Page
+    page.add(
+        content,
+        nav_bar,
+    )
+
+    # Initialize Dashboard
     update_dashboard()
 
 ft.app(target=main)
