@@ -2,27 +2,50 @@ import flet as ft
 from datetime import datetime
 
 def main(page: ft.Page):
-    page.window.width = 390
-    page.window.height = 844
-    page.window.resizable = False
+    # Optional: window sizing (ignored on web)
+    try:
+        page.window.width = 390
+        page.window.height = 844
+        page.window.resizable = False
+    except Exception:
+        # Some runtimes (e.g., web) ignore window properties; ignore errors
+        pass
+
     page.title = "Expense Tracker"
 
-    # Sample data for expenses and income
-    expenses = []
-    income = []
+    # ------- Compatibility for Colors across Flet versions -------
+    if hasattr(ft, "Colors"):
+        Colors = ft.Colors
+    elif hasattr(ft, "colors"):
+        Colors = ft.colors
+    else:
+        Colors = ft  # fallback (may require hex usage)
+    # ------------------------------------------------------------
 
-    # Dashboard Content
+    # Data
+    expenses: list[dict] = []
+    income: list[dict] = []
+
+    # --- UI placeholders ---
+    dashboard_content = ft.Column(spacing=20)
+    reports_content = ft.Column()
+    expenses_list = ft.ListView(expand=True, spacing=10, padding=10)
+
+    # --- Dashboard updater ---
     def update_dashboard():
-        total_spent = sum(expense["amount"] for expense in expenses)
+        total_spent = sum(exp["amount"] for exp in expenses)
         total_received = sum(inc["amount"] for inc in income)
         balance = total_received - total_spent
 
+        # Recent 3 expenses
+        recent = expenses[-3:] if expenses else []
+
         dashboard_content.controls = [
             ft.Text("Dashboard", size=24, weight=ft.FontWeight.BOLD),
-            # Cards Row
+
+            # Cards row
             ft.Row(
                 [
-                    # Money Received Card (Green Gradient)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -31,18 +54,16 @@ def main(page: ft.Page):
                             ],
                             spacing=5,
                         ),
-                        width=100,
+                        width=120,
                         height=90,
                         padding=10,
-                        bgcolor=ft.Colors.GREEN_400,
                         gradient=ft.LinearGradient(
                             begin=ft.alignment.top_left,
                             end=ft.alignment.bottom_right,
-                            colors=[ft.Colors.GREEN_400, ft.Colors.GREEN_700],
+                            colors=[Colors.GREEN_400, Colors.GREEN_700],
                         ),
                         border_radius=ft.border_radius.all(10),
                     ),
-                    # Money Spent Card (Red Gradient)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -51,18 +72,16 @@ def main(page: ft.Page):
                             ],
                             spacing=5,
                         ),
-                        width=100,
+                        width=120,
                         height=90,
                         padding=10,
-                        bgcolor=ft.Colors.RED_400,
                         gradient=ft.LinearGradient(
                             begin=ft.alignment.top_left,
                             end=ft.alignment.bottom_right,
-                            colors=[ft.Colors.RED_400, ft.Colors.RED_700],
+                            colors=[Colors.RED_400, Colors.RED_700],
                         ),
                         border_radius=ft.border_radius.all(10),
                     ),
-                    # Remaining Balance Card (Blue Gradient)
                     ft.Container(
                         content=ft.Column(
                             [
@@ -71,14 +90,13 @@ def main(page: ft.Page):
                             ],
                             spacing=5,
                         ),
-                        width=100,
+                        width=120,
                         height=90,
                         padding=10,
-                        bgcolor=ft.Colors.BLUE_400,
                         gradient=ft.LinearGradient(
                             begin=ft.alignment.top_left,
                             end=ft.alignment.bottom_right,
-                            colors=[ft.Colors.BLUE_400, ft.Colors.BLUE_700],
+                            colors=[Colors.BLUE_400, Colors.BLUE_700],
                         ),
                         border_radius=ft.border_radius.all(10),
                     ),
@@ -86,21 +104,20 @@ def main(page: ft.Page):
                 spacing=10,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
+
             ft.Text("Recent Expenses:", size=18, weight=ft.FontWeight.BOLD),
-            ft.Column([ft.Text(f"- {exp['description']}: ${exp['amount']:.2f}") for exp in expenses[-3:]]),
+            ft.Column([ft.Text(f"- {exp['description']}: ${exp['amount']:.2f}") for exp in recent]),
         ]
         page.update()
 
-    dashboard_content = ft.Column(spacing=20)
-
-    # Expenses Content
+    # --- Expense input fields ---
     expense_amount = ft.TextField(
         label="Amount",
         hint_text="0.00",
         prefix_text="$",
         keyboard_type=ft.KeyboardType.NUMBER,
         width=150,
-        border_color=ft.Colors.BLUE_400
+        border_color=Colors.BLUE_400
     )
 
     expense_category = ft.Dropdown(
@@ -118,14 +135,14 @@ def main(page: ft.Page):
             ft.dropdown.Option("💼 Business"),
             ft.dropdown.Option("❓ Other"),
         ],
-        border_color=ft.Colors.BLUE_400
+        border_color=Colors.BLUE_400
     )
 
     expense_description = ft.TextField(
         label="Description",
         hint_text="What did you spend on?",
         width=200,
-        border_color=ft.Colors.BLUE_400
+        border_color=Colors.BLUE_400
     )
 
     expense_date = ft.TextField(
@@ -133,92 +150,39 @@ def main(page: ft.Page):
         hint_text="YYYY-MM-DD",
         value=datetime.now().strftime("%Y-%m-%d"),
         width=150,
-        border_color=ft.Colors.BLUE_400
+        border_color=Colors.BLUE_400
     )
 
-    # Add Expense Button
-    def add_expense(e):
-        if expense_amount.value and expense_category.value:
-            try:
-                amount = float(expense_amount.value)
-                new_expense = {
-                    "amount": amount,
-                    "category": expense_category.value,
-                    "description": expense_description.value or "No description",
-                    "date": expense_date.value or datetime.now().strftime("%Y-%m-%d")
-                }
-                expenses.append(new_expense)
+    # --- Add / delete logic ---
+    def update_total():
+        total = sum(exp["amount"] for exp in expenses)
+        total_expenses_text.value = f"Total: ${total:.2f}"
+        page.update()
 
-                # Clear form
-                expense_amount.value = ""
-                expense_description.value = ""
-                expense_category.value = None
-
-                # Update UI
-                update_expenses_list()
-                update_dashboard()
-
-                # Show success message
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("✅ Expense added successfully!"),
-                    bgcolor=ft.Colors.GREEN_400
-                )
-                page.snack_bar.open = True
-                page.update()
-
-            except ValueError:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("❌ Please enter a valid amount!"),
-                    bgcolor=ft.Colors.RED_400
-                )
-                page.snack_bar.open = True
-                page.update()
-        else:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("❌ Please fill in amount and category!"),
-                bgcolor=ft.Colors.RED_400
-            )
-            page.snack_bar.open = True
-            page.update()
-
-    add_button = ft.ElevatedButton(
-        "Add Expense",
-        icon=ft.Icons.ADD_CIRCLE,
-        color=ft.Colors.WHITE,
-        bgcolor=ft.Colors.BLUE_400,
-        on_click=add_expense,
-        style=ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=10)
-        )
-    )
-
-    # Expenses List Section
-    expenses_list = ft.ListView(
-        expand=True,
-        spacing=10,
-        padding=10
-    )
+    total_expenses_text = ft.Text("Total: $0.00", size=18, weight=ft.FontWeight.BOLD)
 
     def update_expenses_list():
         expenses_list.controls.clear()
 
         if not expenses:
-            # Show empty state
             expenses_list.controls.append(
                 ft.Container(
                     content=ft.Column([
-                        ft.Icon(ft.Icons.MONEY_OFF, size=48, color=ft.Colors.GREY_400),
-                        ft.Text("No expenses yet", size=16, color=ft.Colors.GREY_600),
-                        ft.Text("Add your first expense above!", size=14, color=ft.Colors.GREY_500),
+                        ft.Icon(ft.Icons.MONEY_OFF, size=48, color=Colors.GREY_400),
+                        ft.Text("No expenses yet", size=16, color=Colors.GREY_600),
+                        ft.Text("Add your first expense above!", size=14, color=Colors.GREY_500),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
                     padding=40,
                     alignment=ft.alignment.center
                 )
             )
         else:
-            # Show expenses (newest first)
+            # reversed so newest first in UI
             for i, exp in enumerate(reversed(expenses)):
-                # Get emoji for category
+                # idx in original list
+                idx_in_original = len(expenses) - 1 - i
+
+                # emoji map (keyed by full category text)
                 emoji_map = {
                     "🍔 Food": "🍔",
                     "🚗 Transport": "🚗",
@@ -232,13 +196,22 @@ def main(page: ft.Page):
                     "❓ Other": "❓"
                 }
                 emoji = emoji_map.get(exp["category"], "💰")
-                category_name = exp["category"].split(" ")[-1]  # Remove emoji for display
+
+                # Get readable category name (drop leading emoji + space if present)
+                parts = exp["category"].split(" ")
+                if len(parts) > 1:
+                    category_name = " ".join(parts[1:])
+                else:
+                    category_name = exp["category"]
+
+                # create delete handler bound to the current index
+                def make_delete_handler(index):
+                    return lambda e: delete_expense(index)
 
                 expenses_list.controls.append(
                     ft.Card(
                         content=ft.Container(
                             content=ft.Row([
-                                # Left side: Emoji and main info
                                 ft.Row([
                                     ft.Text(emoji, size=20),
                                     ft.Column([
@@ -250,29 +223,28 @@ def main(page: ft.Page):
                                         ft.Text(
                                             exp["description"],
                                             size=12,
-                                            color=ft.Colors.GREY_600
+                                            color=Colors.GREY_600
                                         ),
                                         ft.Text(
                                             exp["date"],
                                             size=10,
-                                            color=ft.Colors.GREY_500
+                                            color=Colors.GREY_500
                                         ),
                                     ], spacing=2),
                                 ], spacing=15),
 
-                                # Right side: Amount and delete button
                                 ft.Row([
                                     ft.Text(
                                         f"${exp['amount']:.2f}",
                                         size=16,
                                         weight=ft.FontWeight.BOLD,
-                                        color=ft.Colors.RED_600
+                                        color=Colors.RED_600
                                     ),
                                     ft.IconButton(
                                         icon=ft.Icons.DELETE_OUTLINE,
-                                        icon_color=ft.Colors.RED_400,
+                                        icon_color=Colors.RED_400,
                                         icon_size=20,
-                                        on_click=lambda e, idx=len(expenses)-1-i: delete_expense(idx),
+                                        on_click=make_delete_handler(idx_in_original),
                                         tooltip="Delete expense"
                                     ),
                                 ], spacing=5),
@@ -283,57 +255,104 @@ def main(page: ft.Page):
                         elevation=2,
                     )
                 )
+
         page.update()
 
-    def delete_expense(index):
-        expenses.pop(index)
+    def delete_expense(index: int):
+        if 0 <= index < len(expenses):
+            expenses.pop(index)
+            update_expenses_list()
+            update_total()
+            update_dashboard()
+            # feedback
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text("🗑️ Expense deleted!"),
+                bgcolor=Colors.ORANGE_400
+            )
+            page.snack_bar.open = True
+            page.update()
+
+    def add_expense(e):
+        if not expense_amount.value or not expense_category.value:
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text("❌ Please fill in amount and category!"),
+                bgcolor=Colors.RED_400
+            )
+            page.snack_bar.open = True
+            page.update()
+            return
+
+        try:
+            amount = float(expense_amount.value)
+        except Exception:
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text("❌ Please enter a valid amount!"),
+                bgcolor=Colors.RED_400
+            )
+            page.snack_bar.open = True
+            page.update()
+            return
+
+        new_expense = {
+            "amount": amount,
+            "category": expense_category.value,
+            "description": expense_description.value or "No description",
+            "date": expense_date.value or datetime.now().strftime("%Y-%m-%d")
+        }
+        expenses.append(new_expense)
+
+        # Clear form
+        expense_amount.value = ""
+        expense_description.value = ""
+        expense_category.value = None
+
+        # Update UI
         update_expenses_list()
+        update_total()
         update_dashboard()
+
+        # feedback
         page.snack_bar = ft.SnackBar(
-            content=ft.Text("🗑️ Expense deleted!"),
-            bgcolor=ft.Colors.ORANGE_400
+            content=ft.Text("✅ Expense added successfully!"),
+            bgcolor=Colors.GREEN_400
         )
         page.snack_bar.open = True
         page.update()
 
-    # Total Expenses Summary
-    total_expenses_text = ft.Text("Total: $0.00", size=18, weight=ft.FontWeight.BOLD)
+    add_button = ft.ElevatedButton(
+        "Add Expense",
+        icon=ft.Icons.ADD_CIRCLE,
+        color="white",
+        bgcolor=Colors.BLUE_400,
+        on_click=add_expense,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
+    )
 
-    def update_total():
-        total = sum(exp["amount"] for exp in expenses)
-        total_expenses_text.value = f"Total: ${total:.2f}"
-        page.update()
-
-    # Main Expenses Page Layout
+    # --- Expenses Page layout ---
     expenses_content = ft.Column([
-        # Header
         ft.Container(
             content=ft.Row([
-                ft.Icon(ft.Icons.ACCOUNT_BALANCE_WALLET, color=ft.Colors.BLUE_400),
+                ft.Icon(ft.Icons.ACCOUNT_BALANCE_WALLET, color=Colors.BLUE_400),
                 ft.Text("Expenses", size=24, weight=ft.FontWeight.BOLD),
             ], spacing=10),
             padding=ft.padding.only(bottom=20)
         ),
 
-        # Input Form Card
         ft.Card(
             content=ft.Container(
                 content=ft.Column([
                     ft.Text("Add New Expense", size=18, weight=ft.FontWeight.BOLD),
 
-                    # First row of inputs
                     ft.ResponsiveRow([
                         ft.Container(expense_amount, col=6),
                         ft.Container(expense_category, col=6),
                     ]),
 
-                    # Second row of inputs
                     ft.ResponsiveRow([
                         ft.Container(expense_description, col=8),
                         ft.Container(expense_date, col=4),
                     ]),
 
-                    # Add button
                     ft.Container(
                         add_button,
                         alignment=ft.alignment.center_right,
@@ -345,10 +364,8 @@ def main(page: ft.Page):
             elevation=3,
         ),
 
-        # Summary and List
         ft.Container(
             content=ft.Column([
-                # Total summary
                 ft.Card(
                     content=ft.Container(
                         content=ft.Row([
@@ -357,21 +374,19 @@ def main(page: ft.Page):
                         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                         padding=15,
                     ),
-                    color=ft.Colors.BLUE_50,
+                    color=Colors.BLUE_50,
                     elevation=1,
                 ),
 
-                # Expenses list header
                 ft.Row([
                     ft.Text("Your Expenses", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"({len(expenses)})", size=16, color=ft.Colors.GREY_600),
+                    ft.Text(f"({len(expenses)})", size=16, color=Colors.GREY_600),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                # Expenses list
                 ft.Container(
                     content=expenses_list,
                     height=400,
-                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    border=ft.border.all(1, Colors.GREY_200),
                     border_radius=10,
                     padding=10,
                 )
@@ -380,49 +395,68 @@ def main(page: ft.Page):
         )
     ], scroll=ft.ScrollMode.ADAPTIVE)
 
-    # Reports Content
+    # --- Reports Page ---
     def update_reports_chart():
-        categories = set(exp["category"] for exp in expenses)
-        bars = []
-        for cat in categories:
-            total = sum(exp["amount"] for exp in expenses if exp["category"] == cat)
-            bars.append(
-                ft.BarChartRod(
-                    from_y=0,
-                    to_y=total,
-                    width=20,
-                    color=ft.Colors.BLUE_400,
-                    tooltip=f"{cat}: ${total:.2f}",
-                    text_above_rod=ft.Text(f"${total:.2f}", size=12),
+        # Safe early-exit if no expenses
+        if not expenses:
+            reports_content.controls = [
+                ft.Text("Reports", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("No data available yet.", size=16, color=Colors.GREY_600),
+            ]
+            page.update()
+            return
+
+        # Aggregate totals per category (preserve order)
+        categories_totals: dict[str, float] = {}
+        for exp in expenses:
+            categories_totals.setdefault(exp["category"], 0.0)
+            categories_totals[exp["category"]] += exp["amount"]
+
+        # Build bar groups: one group per category (x increments)
+        bar_groups = []
+        x_value = 0
+        for cat, total in categories_totals.items():
+            bar_groups.append(
+                ft.BarChartGroup(
+                    x=x_value,
+                    bar_rods=[
+                        ft.BarChartRod(
+                            from_y=0,
+                            to_y=total,
+                            width=20,
+                            color=Colors.BLUE_400,
+                            tooltip=f"{cat}: ${total:.2f}",
+                            text_above_rod=ft.Text(f"${total:.2f}", size=12),
+                        )
+                    ],
                 )
             )
+            x_value += 1
+
+        max_y_value = max(categories_totals.values()) + 10 if categories_totals else 100
+
         reports_content.controls = [
             ft.Text("Reports", size=24, weight=ft.FontWeight.BOLD),
             ft.Text("Expenses by Category:", size=18, weight=ft.FontWeight.BOLD),
             ft.BarChart(
-                bar_groups=[
-                    ft.BarChartGroup(
-                        x=100,
-                        bar_rods=bars,
-                    )
-                ],
-                border=ft.BorderSide(1, ft.Colors.GREY_400),
+                bar_groups=bar_groups,
+                border=ft.BorderSide(1, Colors.GREY_400),
                 expand=True,
-                max_y=max(exp["amount"] for exp in expenses) + 10 if expenses else 100,
+                max_y=max_y_value,
             )
         ]
         page.update()
 
-    reports_content = ft.Column()
-
-    # Settings Content
+    # Settings content
     settings_content = ft.Column([
         ft.Text("Settings", size=24, weight=ft.FontWeight.BOLD),
         ft.Text("Configure your expense tracker settings."),
         ft.ElevatedButton("Export Data", on_click=lambda e: print("Exporting data..."))
     ])
 
-    # Navigation Bar
+    # Navigation handling
+    content = ft.Container(content=dashboard_content, expand=True, padding=20)
+
     def on_nav_change(e):
         selected_index = e.control.selected_index
         if selected_index == 0:
@@ -447,20 +481,12 @@ def main(page: ft.Page):
         on_change=on_nav_change,
     )
 
-    # Main Content Area
-    content = ft.Container(
-        content=dashboard_content,
-        expand=True,
-        padding=20,
-    )
+    # Compose page
+    page.add(content, nav_bar)
 
-    # Add NavigationBar and Content to Page
-    page.add(
-        content,
-        nav_bar,
-    )
-
-    # Initialize Dashboard
+    # Initialize
+    update_expenses_list()
+    update_total()
     update_dashboard()
 
 ft.app(target=main)
