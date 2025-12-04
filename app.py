@@ -490,3 +490,4 @@ def main(page: ft.Page):
     update_dashboard()
 
 ft.app(target=main)
+
