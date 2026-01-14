@@ -1,12 +1,34 @@
+# First, let's make sure our app is ready for mobile
+# Add this to the beginning of your app.py:
+
 import flet as ft
 from datetime import datetime, date
 import json
 import os
+import sys
+
+# Check if running on mobile
+def is_mobile():
+    return hasattr(ft.Page, "platform") and ft.Page.platform in ["android", "ios"]
 
 def main(page: ft.Page):
-    page.window.width = 390
-    page.window.height = 844
-    page.window.resizable = False
+    # Adjust window size for mobile
+    if not is_mobile():
+        page.window.width = 390
+        page.window.height = 844
+        page.window.resizable = False
+    
+    page.title = "Expense Tracker"
+    
+    # ... rest of your existing code ...
+
+def main(page: ft.Page):
+    # Adjust window size for mobile
+    if not is_mobile():
+        page.window.width = 390
+        page.window.height = 844
+        page.window.resizable = False
+    
     page.title = "Expense Tracker"
 
     # Data files
